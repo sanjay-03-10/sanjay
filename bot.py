@@ -6,9 +6,11 @@ import re  # For custom tokenization using regular expressions
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from nltk.stem import PorterStemmer
+import requests  # To send messages to WhatsApp API
 
 # Load environment variables (important for Render deployment)
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "sanjay")  # Change this in Render settings
+WHATSAPP_API_TOKEN = os.getenv("WHATSAPP_API_TOKEN", "EAANoOAs4aXABO12QhsiZB7DwryLbcpDeOBSNBZBaiIY7xccoLKjgsliZBDcY7KWwqZANdZCjoQrMdVsiy8l1R75eGDQdrlBG8wfg2wV4KsTUH0nFMZAfw4HZCvxZCRFBxeojRwKos0VBQ5x5440lZAr4m7MPPu8Jg8MgVhhZAmghfpDpwJpSXzikRdnfuR7NP2gK7cbsZC0sdZCEkLmDurWZAhkI0GlQlkP8ZD")  # Add your WhatsApp API Token here
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -117,6 +119,21 @@ except FileNotFoundError:
     torch.save(model.state_dict(), "chatbot_model.pth")
     print("Model trained and saved!")
 
+# Function to send a message to WhatsApp
+def send_message(phone_number, message):
+    url = "https://graph.facebook.com/v13.0/<WHATSAPP_PHONE_NUMBER_ID>/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_API_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": phone_number,
+        "text": {"body": message},
+    }
+    response = requests.post(url, headers=headers, json=payload)
+    return response.json()
+
 # Webhook Verification Endpoint for WhatsApp
 @app.route("/webhook", methods=["GET"])
 def verify_webhook():
@@ -144,6 +161,9 @@ def webhook():
         output = model(bag_tensor)
         _, predicted = torch.max(output, dim=0)
         response_tag = tags[predicted.item()]
+
+    # Send response message to user on WhatsApp
+    send_message(data["from"], response_tag)
 
     return jsonify({"response": response_tag})
 
