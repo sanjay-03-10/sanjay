@@ -3,14 +3,16 @@ import torch.nn as nn
 import numpy as np
 import re  # For custom tokenization using regular expressions
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from nltk.stem import PorterStemmer
 
 # Initialize Flask app
 app = Flask(__name__)
+CORS(app)  # Enable CORS for external API calls
 
 # Initialize the stemmer
 class SimpleStemmer:
-    def __init__(self):  # Fixed constructor syntax
+    def __init__(self):
         self.porter = PorterStemmer()
 
     def stem(self, word):
@@ -33,11 +35,11 @@ def bag_of_words(tokenized_sentence, all_words):
 
 # Define the chatbot model
 class ChatbotModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):  # Fixed constructor syntax
+    def __init__(self, input_size, hidden_size, output_size):
         super(ChatbotModel, self).__init__()
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, output_size)
-    
+
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = self.fc2(x)
@@ -87,22 +89,29 @@ hidden_size = 8
 output_size = len(tags)
 model = ChatbotModel(input_size, hidden_size, output_size)
 
-# Loss and optimizer
-criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+# Load or Train Model
+try:
+    model.load_state_dict(torch.load("chatbot_model.pth"))  # Load pre-trained model
+    model.eval()
+    print("Model loaded successfully!")
+except FileNotFoundError:
+    # Train the model if no saved model is found
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    epochs = 1000
+    for epoch in range(epochs):
+        x_data = torch.tensor(x_train, dtype=torch.float32)
+        y_data = torch.tensor(y_train, dtype=torch.long)
 
-# Train the model
-epochs = 1000
-for epoch in range(epochs):
-    x_data = torch.tensor(x_train, dtype=torch.float32)
-    y_data = torch.tensor(y_train, dtype=torch.long)
+        outputs = model(x_data)
+        loss = criterion(outputs, y_data)
 
-    outputs = model(x_data)
-    loss = criterion(outputs, y_data)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
+    torch.save(model.state_dict(), "chatbot_model.pth")
+    print("Model trained and saved!")
 
 # WhatsApp Webhook Endpoint
 @app.route("/webhook", methods=["POST"])
@@ -124,6 +133,11 @@ def webhook():
         response_tag = tags[predicted.item()]
 
     return jsonify({"response": response_tag})
+
+# Flask App Home Route
+@app.route("/", methods=["GET"])
+def home():
+    return "🚀 WhatsApp Bot is Running!"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
