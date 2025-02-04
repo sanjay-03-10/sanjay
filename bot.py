@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import numpy as np
@@ -5,6 +6,9 @@ import re  # For custom tokenization using regular expressions
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from nltk.stem import PorterStemmer
+
+# Load environment variables (important for Render deployment)
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "sanjay")  # Change this in Render settings
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -113,7 +117,16 @@ except FileNotFoundError:
     torch.save(model.state_dict(), "chatbot_model.pth")
     print("Model trained and saved!")
 
-# WhatsApp Webhook Endpoint
+# Webhook Verification Endpoint for WhatsApp
+@app.route("/webhook", methods=["GET"])
+def verify_webhook():
+    token_sent = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+    if token_sent == VERIFY_TOKEN:
+        return challenge  # Verify webhook
+    return "Verification failed", 403
+
+# Webhook for receiving WhatsApp messages
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json()
