@@ -121,7 +121,7 @@ except FileNotFoundError:
 
 # Function to send a message to WhatsApp
 def send_message(phone_number, message):
-    url = "https://graph.facebook.com/v13.0/<WHATSAPP_PHONE_NUMBER_ID>/messages"
+    url = f"https://graph.facebook.com/v13.0/{os.getenv('557681054094220')}/messages"  # Add phone number ID
     headers = {
         "Authorization": f"Bearer {WHATSAPP_API_TOKEN}",
         "Content-Type": "application/json",
@@ -173,4 +173,4 @@ def home():
     return "🚀 WhatsApp Bot is Running!"
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
