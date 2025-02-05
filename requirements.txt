@@ -4,3 +4,4 @@ flask
 flask-cors
 nltk
 requests
+gunicorn
