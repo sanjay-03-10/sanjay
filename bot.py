@@ -11,7 +11,7 @@ import requests
 # Load environment variables
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "sanjay")
 WHATSAPP_API_TOKEN = os.getenv("EAANoOAs4aXABO3HwZB0l4p2tdULlTjQIXA9jH4lOJDwpgo5KguLjcOeilcafQzIn83eOmxDZCSLE1dO6br2Fr9sfUWw3oqvluFIkiBVZA2Nfu3xZAfM79QZAWdkHlB1WKj7o2QWqHA8wGqthZCZANbXBlxHyFEs8CtkRjZA20fhgyu5aRcrwcpP4pS2pCtal6YeIJK23TZCwO9Np9LQ8muNqYSleYJb0ZD")  # Ensure this is set in environment
-WHATSAPP_PHONE_ID = os.getenv("557681054094220")  # Add Phone ID from Meta API
+WHATSAPP_PHONE_ID = os.getenv("WHATSAPP_PHONE_ID", "557681054094220")  # Corrected usage
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -106,13 +106,15 @@ except FileNotFoundError:
 # Function to send message to WhatsApp
 def send_message(phone_number, message):
     if not WHATSAPP_API_TOKEN or not WHATSAPP_PHONE_ID:
-        print("Missing WhatsApp API credentials.")
+        print("❌ Missing WhatsApp API credentials.")
         return
     
-    url = f"https://graph.facebook.com/v13.0/{WHATSAPP_PHONE_ID}/messages"
+    url = f"https://graph.facebook.com/v17.0/{WHATSAPP_PHONE_ID}/messages"
     headers = {"Authorization": f"Bearer {WHATSAPP_API_TOKEN}", "Content-Type": "application/json"}
-    payload = {"messaging_product": "whatsapp", "to": phone_number, "text": {"body": message}}
+    payload = {"messaging_product": "whatsapp", "to": phone_number, "type": "text", "text": {"body": message}}
+    
     response = requests.post(url, headers=headers, json=payload)
+    print("📩 API Response:", response.json())  # ✅ Log the response
     return response.json()
 
 # Webhook verification endpoint
@@ -125,24 +127,36 @@ def verify_webhook():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json()
-    user_message = data.get("message", "").strip().lower()
-    phone_number = data.get("from")
+    print("📥 Incoming Message Data:", data)  # ✅ Debugging log
     
-    if not user_message:
-        return jsonify({"response": "Sorry, I didn't understand that."})
+    try:
+        entry = data.get("entry", [])[0]  
+        changes = entry.get("changes", [])[0]  
+        message_data = changes.get("value", {}).get("messages", [])[0]
     
-    # Process user message
-    tokenized_message = tokenize(user_message)
-    bag = bag_of_words(tokenized_message, all_words)
-    bag_tensor = torch.tensor(bag, dtype=torch.float32)
+        if not message_data:
+            return jsonify({"status": "No message received"}), 200
     
-    with torch.no_grad():
-        output = model(bag_tensor)
-        _, predicted = torch.max(output, dim=0)
-        response_tag = tags[predicted.item()]
+        user_message = message_data.get("text", {}).get("body", "").strip().lower()
+        phone_number = message_data.get("from")
     
-    send_message(phone_number, response_tag)
-    return jsonify({"response": response_tag})
+        # Process user message
+        tokenized_message = tokenize(user_message)
+        bag = bag_of_words(tokenized_message, all_words)
+        bag_tensor = torch.tensor(bag, dtype=torch.float32)
+    
+        with torch.no_grad():
+            output = model(bag_tensor)
+            _, predicted = torch.max(output, dim=0)
+            response_tag = tags[predicted.item()]
+    
+        predicted_response = next((intent["response"] for intent in intents if intent["response"] == response_tag), "Sorry, I didn't understand that.")
+        send_message(phone_number, predicted_response)
+        
+        return jsonify({"response": predicted_response})
+    except Exception as e:
+        print("❌ Error Handling Message:", str(e))
+        return jsonify({"error": str(e)}), 500
 
 # Home Route
 @app.route("/", methods=["GET"])
